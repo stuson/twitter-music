@@ -5,5 +5,8 @@ setup(
     version="0.0.1",
     description="Generate music from a Twitter feed.",
     author="Samuel Tuson",
-    packages=find_packages()
+    packages=find_packages(),
+    install_requires=[
+        'python-twitter',
+    ]
 )
