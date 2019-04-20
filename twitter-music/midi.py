@@ -3,7 +3,7 @@ import os
 from time import sleep
 from mido import Message
 from sys import argv
-from random import choice
+from random import choice, choices
 
 class Track(mido.MidiTrack):
     def __init__(self, *args, **kwargs):
@@ -13,12 +13,98 @@ class Track(mido.MidiTrack):
         self.append(Message('note_on', note=note, velocity=velocity, time=time))
         self.append(Message('note_off', note=note, velocity=velocity, time=length))
     
-    def add_chord(self, notes):
-        # TODO: Some logic required here.
-        #       The notes should have a note_off event tied to their note_on time.
-        #       Since time is actually a time delta keep track fo when note_off
-        #       actually be used.
-        pass
+    def add_chord(self, notes, length=480):
+        for n in notes:
+            self.append(
+                Message(
+                    'note_on',
+                    note=n.get('note', 64),
+                    velocity=n.get('velocity', 64),
+                    time=n.get('time', 0),
+                )
+            )
+
+        self.append(
+            Message(
+                'note_off',
+                note=notes[0].get('note', 64),
+                velocity=notes[0].get('velocity', 64),
+                time=length
+            )
+        )
+
+        for n in notes[1:]:
+            self.append(
+                Message(
+                    'note_off',
+                    note=n.get('note', 64),
+                    velocity=n.get('velocity', 64),
+                    time=0
+                )
+            )
+
+class Scale:
+    def __init__(self, scale_str):
+        tonic_mod = ord(scale_str[0].lower()) - 97
+        try:
+            if scale_str[1] == '#':
+                tonic_mod += 1
+            elif scale_str[1] == 'b':
+                tonic_mod -= 1
+        except IndexError:
+            pass
+
+        self.scale = scale_str
+        self.tonic = 58 + tonic_mod
+        self.major = scale_str[0] == scale_str[0].upper()
+
+        self.notes = [                   # e.g. for scale a/A
+            self.tonic,                  # A/A
+            self.tonic + 2,              # B/B
+            self.tonic + 3 + self.major, # C/C#
+            self.tonic + 5,              # D/D
+            self.tonic + 7,              # E/E
+            self.tonic + 8 + self.major, # F/F#
+            self.tonic + 11,             # G#/G#
+        ]
+        
+        root = {
+            'i': 0,
+            'ii': 1,
+            'iii': 2,
+            'iv': 3,
+            'v': 4,
+            'vi': 5,
+            'vii': 6,
+        }
+
+        chords = {
+            key: [ self.notes[val], self.notes[val] + 3, self.notes[val] + 7 ]
+            for key, val
+            in root.items()
+        }
+
+        chords.update(
+            {
+                key.upper(): [ self.notes[val], self.notes[val] + 4, self.notes[val] + 7 ]
+                for key, val
+                in root.items()
+            }
+        )
+
+        self.chords = chords
+    
+    def get_chord(self, chord_str, velocity=60, length=480):
+        chord = [
+            {
+                'note': note,
+                'velocity': velocity
+            }
+            for note
+            in self.chords[chord_str]
+        ]
+
+        return chord
 
 def play_file(midi):
     timidity_ports = [port for port in mido.get_output_names() if 'TiMidity' in port]
@@ -46,12 +132,24 @@ def main():
 
     track.append(Message('program_change', program=12))
 
-    notes = [60, 64, 67, 70, 72]
-    times = [0, 0, 0, 0, 120, 240, 360, 480]
-    durations = [120, 240, 360, 480, 480, 480, 480]
-    
-    for i in range(20):
-        track.add_note(note=choice(notes), time=choice(times), length=choice(durations))
+    dmaj = Scale('D')
+
+    seq = [
+        'I','-','I','-',
+        'V','-','V','-',
+        'IV','-','IV','-',
+        'iv','-','iv','-',
+    ]
+
+    for ch in seq:
+        if ch != '-':
+            track.add_chord(
+                dmaj.get_chord(ch)
+            )
+        else:
+            track.add_chord(
+                [{'velocity': 0}]
+            )
 
     midi.tracks.append(track)    
 
